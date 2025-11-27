@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import html2pdf from "html2pdf.js";
-// Import Faker untuk Indonesia dan Inggris (Internasional)
 import { fakerID_ID, fakerEN } from "@faker-js/faker";
+// Import library Signature Maker
+import "@docuseal/signature-maker-js";
 
 // =========================================
-// 1. DATA & CONFIG
+// 1. DATA CONSTANTS & CONFIGURATION
 // =========================================
 
 const COURSES_IIUM = [
@@ -27,10 +28,30 @@ const COURSES_RAHARJA = [
   { code: "JARKOM", name: "Jaringan Komputer", credits: 3, hasLab: true },
 ];
 
+const COURSES_UOC = [
+  { code: "BPH 101", name: "Introduction to Pharmacy", credits: 3, hasLab: true },
+  { code: "MED 104", name: "Human Anatomy", credits: 4, hasLab: true },
+  { code: "PSY 110", name: "General Psychology", credits: 3, hasLab: false },
+  { code: "OSH 201", name: "Occupational Safety & Health", credits: 3, hasLab: false },
+  { code: "MPU 3123", name: "Tamadun Islam & Tamadun Asia", credits: 2, hasLab: false },
+  { code: "BUS 105", name: "Principles of Management", credits: 3, hasLab: false },
+  { code: "ENG 102", name: "English for Academic Purposes", credits: 2, hasLab: false },
+];
+
+const VENUE_LIST_RAHARJA = ["Lab iLearning", "R. L201", "R. M303", "Grand Max Theatre", "Lab Jaringan"];
+const VENUE_LIST_IIUM = ["KICT Lab 1", "KICT LR 2", "Main Hall", "Auditorium"];
+const VENUE_LIST_UOC = ["Grand Hall", "Pharmacy Lab 2", "Anatomy Room", "Lecture Theatre 1", "Psych Lab"];
+
+const DAY_LIST = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
+const TIME_LIST = ["08:00 - 10:00", "10:00 - 12:00", "13:00 - 15:00", "15:30 - 17:30", "18:30 - 20:30"];
+
 const PRESETS = {
   RAHARJA: {
     id: "RAHARJA",
     logoUrl: "/logo-raharja.png",
+    signUrl: "/sign.png",
+    // Config Logo Standard
+    logoStyle: { height: "70px", width: "auto" },
     uniName: "UNIVERSITAS RAHARJA",
     uniAddress: "Jl. Jenderal Sudirman No. 40, Modernland, Tangerang 15117, Indonesia",
     uniContact: "Tel: 021-5529692 | info@raharja.ac.id | www.raharja.ac.id",
@@ -58,6 +79,9 @@ const PRESETS = {
   IIUM: {
     id: "IIUM",
     logoUrl: "/logo-iium.png",
+    signUrl: "/sign.png",
+    // Config Logo Standard
+    logoStyle: { height: "70px", width: "auto" },
     uniName: "INTERNATIONAL ISLAMIC UNIVERSITY MALAYSIA (IIUM)",
     uniAddress: "P.O. Box 10, 50728 Kuala Lumpur, Malaysia",
     uniContact: "Tel: +603-6421 6421 | www.iium.edu.my",
@@ -81,38 +105,89 @@ const PRESETS = {
       level: "Undergraduate",
       section: "Section 1"
     }
+  },
+  UOC: {
+    id: "UOC",
+    logoUrl: "/logo-uoc.png",
+    signUrl: "/sign.png",
+    // === FIX LOGO UOC ===
+    // Menggunakan max-width agar tidak terlalu besar/lebar
+    logoStyle: { height: "auto", maxWidth: "250px", maxHeight: "60px" },
+    uniName: "UNIVERSITY OF CYBERJAYA",
+    uniAddress: "Persiaran Bestari, Cyber 11, 63000 Cyberjaya, Selangor, Malaysia",
+    uniContact: "Tel: +603-8313 7000 | inquiry@cyberjaya.edu.my",
+    docTitle: "REGISTRATION STATEMENT",
+    officeText: "Registrar Office",
+    emailSuffix: "@student.cyberjaya.edu.my",
+    labels: {
+      id: "Student ID",
+      studentName: "Student Name",
+      faculty: "Faculty",
+      dept: "Programme",
+      level: "Level of Study",
+      section: "Cohort / Intake",
+      credits: "Credits",
+      lecturer: "Instructor",
+      consultant: "Mentor"
+    },
+    defaultData: {
+      faculty: "Faculty of Psychology & Social Sciences",
+      dept: "Bachelor of Psychology (Hons)",
+      level: "Degree",
+      section: "Sep 2024 Intake"
+    }
   }
 };
 
-// --- Utils ---
-const DAY_LIST = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
-const TIME_LIST = ["08:00 - 10:00", "10:00 - 12:00", "13:00 - 15:00", "15:30 - 17:30", "18:30 - 20:30"];
-const VENUE_LIST_RAHARJA = ["Lab iLearning", "R. L201", "R. M303", "Grand Max Theatre", "Lab Jaringan"];
-const VENUE_LIST_IIUM = ["KICT Lab 1", "KICT LR 2", "Main Hall", "Auditorium"];
+// =========================================
+// 2. HELPER FUNCTIONS
+// =========================================
 
-function getRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function getRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
-// Helper untuk Generate Nama pakai Faker
+function getDynamicSemester(presetType) {
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  let acadYear = "", semesterLabel = "";
+
+  if (month >= 7) {
+      acadYear = `${year}/${year + 1}`;
+      semesterLabel = presetType === 'RAHARJA' ? "Ganjil" : "1";
+  } else {
+      acadYear = `${year - 1}/${year}`;
+      semesterLabel = presetType === 'RAHARJA' ? "Genap" : "2";
+  }
+
+  if (presetType === 'RAHARJA') {
+      return `Semester ${semesterLabel} T.A. ${acadYear}`;
+  } else {
+      return `Semester ${semesterLabel}, Session ${acadYear}`;
+  }
+}
+
 function generateFakerName(preset) {
   if (preset === "RAHARJA") {
-    // Nama Indonesia (Jawa/Sunda/Umum tercampur di locale ID)
     return fakerID_ID.person.fullName();
   } else {
-    // Untuk IIUM, kita coba mix biar kayak nama Melayu/Inter
-    // Kadang fakerEN terlalu "John Doe", jadi kita bisa custom dikit
-    const isMalay = Math.random() > 0.3; // 70% kemungkinan nama Melayu style
+    const isMalay = Math.random() > 0.3;
     if (isMalay) {
       const gender = Math.random() > 0.5 ? 'male' : 'female';
-      const first = fakerID_ID.person.firstName(gender); // Pake ID firstname biar agak melayu
+      const first = fakerID_ID.person.firstName(gender);
       const father = fakerID_ID.person.firstName('male');
       const bin = gender === 'male' ? 'bin' : 'binti';
       return `${first} ${bin} ${father}`;
     }
-    return fakerEN.person.fullName(); // 30% nama International
+    return fakerEN.person.fullName();
   }
 }
 
-// === COMPONENT: INPUT DENGAN COPY BUTTON ===
+// =========================================
+// 3. UI COMPONENTS
+// =========================================
+
 const InputGroup = ({ label, value, onChange, placeholder }) => {
   const [copied, setCopied] = useState(false);
 
@@ -127,13 +202,13 @@ const InputGroup = ({ label, value, onChange, placeholder }) => {
     <div>
       <label className="block font-semibold text-xs text-slate-400 uppercase mb-1">{label}</label>
       <div className="flex relative group">
-        <input 
+        <input
           className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 pr-10 focus:ring-2 focus:ring-purple-500 outline-none text-white text-sm transition-all"
-          value={value} 
+          value={value}
           onChange={onChange}
           placeholder={placeholder}
         />
-        <button 
+        <button
           onClick={handleCopy}
           title="Copy to clipboard"
           className="absolute right-1 top-1 bottom-1 px-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
@@ -152,13 +227,17 @@ const InputGroup = ({ label, value, onChange, placeholder }) => {
   );
 };
 
+// =========================================
+// 4. MAIN APP COMPONENT
+// =========================================
+
 function App() {
   const [activePreset, setActivePreset] = useState("RAHARJA");
-  
+
   // Data States
   const [uniName, setUniName] = useState("");
   const [semesterText, setSemesterText] = useState("");
-  
+
   const [matricNo, setMatricNo] = useState("");
   const [studentName, setStudentName] = useState("");
   const [faculty, setFaculty] = useState("");
@@ -168,6 +247,9 @@ function App() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
+  // Signature State
+  const [studentSignature, setStudentSignature] = useState(null);
+
   const [courses, setCourses] = useState([]);
   const [totalCredits, setTotalCredits] = useState(0);
   const [generatedAt, setGeneratedAt] = useState("");
@@ -176,13 +258,13 @@ function App() {
 
   const slipRef = useRef(null);
 
-  // === INIT ===
+  // === INITIALIZATION ===
   useEffect(() => {
     const config = PRESETS[activePreset];
     setUniName(config.uniName);
     setSemesterText(getDynamicSemester(activePreset));
-    
-    // Reset fields to default
+
+    // Reset fields
     setFaculty(config.defaultData.faculty);
     setDepartment(config.defaultData.dept);
     setLevel(config.defaultData.level);
@@ -191,48 +273,43 @@ function App() {
     setStudentName("");
     setEmail("");
     setPhone("");
+    setStudentSignature(null); // Reset signature when switching uni
     setShown(false);
   }, [activePreset]);
 
-  // === LOGIC TAHUN AJARAN ===
-  function getDynamicSemester(presetType) {
-    const now = new Date();
-    const month = now.getMonth(); 
-    const year = now.getFullYear();
-    let acadYear = "", semesterLabel = "";
+  // === SIGNATURE LISTENER ===
+  useEffect(() => {
+    const handleSignatureChange = (e) => {
+        // e.detail.base64 berisi data gambar tanda tangan
+        if (e.detail && e.detail.base64) {
+            setStudentSignature(e.detail.base64);
+        } else {
+            // Jika dihapus/clear
+            setStudentSignature(null);
+        }
+    };
 
-    if (month >= 7) {
-        acadYear = `${year}/${year + 1}`;
-        semesterLabel = presetType === 'RAHARJA' ? "Ganjil" : "1";
-    } else {
-        acadYear = `${year - 1}/${year}`;
-        semesterLabel = presetType === 'RAHARJA' ? "Genap" : "2";
+    const maker = document.getElementById('signatureMaker');
+    if (maker) {
+        maker.addEventListener('change', handleSignatureChange);
     }
 
-    return presetType === 'RAHARJA' 
-      ? `Semester ${semesterLabel} T.A. ${acadYear}` 
-      : `Semester ${semesterLabel}, Session ${acadYear}`;
-  }
+    // Cleanup listener
+    return () => {
+        if (maker) maker.removeEventListener('change', handleSignatureChange);
+    };
+  }, []);
 
-  // === AUTO FILL + LOGIKA EMAIL ===
+  // === AUTO FILL LOGIC ===
   const handleAutoFillStudent = () => {
     const isRaharja = activePreset === "RAHARJA";
-    
-    // 1. Generate Nama pakai Faker
     const name = generateFakerName(activePreset);
-    
-    // 2. Generate NIM/Matric (Tahun + Random)
     const year = new Date().getFullYear().toString().slice(-2);
     const randomId = Math.floor(Math.random() * 90000 + 10000);
-    const id = year + "1" + randomId;
-
-    // 3. Generate Phone
+    const id = year + (isRaharja ? "1" : "2") + randomId;
     const ph = isRaharja ? "08" + Math.floor(Math.random() * 100000000) : "01" + Math.floor(Math.random() * 100000000);
-
-    // 4. Generate Email (Username based on name + ID suffix)
-    // Bersihkan nama untuk jadi slug email
     const slug = name.split(" ")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
-    const idSuffix = id.slice(-4); 
+    const idSuffix = id.slice(-4);
     const emailDomain = PRESETS[activePreset].emailSuffix;
     const finalEmail = `${slug}${idSuffix}${emailDomain}`;
 
@@ -242,12 +319,27 @@ function App() {
     setEmail(finalEmail);
   };
 
+  // === GENERATE SLIP LOGIC ===
   const handleGenerateSlip = () => {
     if (!studentName) handleAutoFillStudent();
 
-    const isRaharja = activePreset === "RAHARJA";
-    const courseSource = isRaharja ? COURSES_RAHARJA : COURSES_IIUM;
-    const venueSource = isRaharja ? VENUE_LIST_RAHARJA : VENUE_LIST_IIUM;
+    // Select Source based on Preset
+    let courseSource, venueSource, docTitles;
+
+    if (activePreset === "RAHARJA") {
+        courseSource = COURSES_RAHARJA;
+        venueSource = VENUE_LIST_RAHARJA;
+        docTitles = ["Ir.", "Dr.", "Bpk.", "Ibu"];
+    } else if (activePreset === "IIUM") {
+        courseSource = COURSES_IIUM;
+        venueSource = VENUE_LIST_IIUM;
+        docTitles = ["Dr.", "Prof.", "Assoc. Prof."];
+    } else {
+        // UOC
+        courseSource = COURSES_UOC;
+        venueSource = VENUE_LIST_UOC;
+        docTitles = ["Dr.", "Prof.", "Mdm.", "Mr."];
+    }
 
     const shuffled = [...courseSource].sort(() => Math.random() - 0.5);
     const selectedCourses = [];
@@ -258,9 +350,6 @@ function App() {
         const day = getRandom(DAY_LIST);
         const time = getRandom(TIME_LIST);
         const venue = getRandom(venueSource);
-        const docTitles = isRaharja ? ["Ir.", "Dr.", "Bpk.", "Ibu"] : ["Dr.", "Prof."];
-        
-        // Generate Nama Dosen pakai Faker juga
         const randomLecturerName = generateFakerName(activePreset);
         const lecturerName = `${getRandom(docTitles)} ${randomLecturerName}`;
 
@@ -269,7 +358,7 @@ function App() {
             code: c.code,
             name: c.name,
             credits: c.credits,
-            section: isRaharja ? "Kls-A" : "S1",
+            section: activePreset === "RAHARJA" ? "Kls-A" : "S1",
             day, time, venue, lecturer: lecturerName
         });
         creditSum += c.credits;
@@ -278,28 +367,28 @@ function App() {
              selectedCourses.push({
                 no: "",
                 code: "",
-                name: `${c.name} (Lab/Praktikum)`,
+                name: `${c.name} (Lab/Tutorial)`,
                 credits: 0,
                 section: "-",
                 day: getRandom(DAY_LIST),
                 time: getRandom(TIME_LIST),
-                venue: "Lab Komputer",
+                venue: activePreset === "UOC" ? "Science Lab" : "Lab Komputer",
                 lecturer: "-"
              });
         }
 
-        if (creditSum >= 18 && selectedCourses.length > 5) break; 
+        if (creditSum >= 18 && selectedCourses.length > 5) break;
     }
 
     setCourses(selectedCourses);
     setTotalCredits(creditSum);
 
-    const locale = isRaharja ? "id-ID" : "en-MY";
+    const locale = activePreset === "RAHARJA" ? "id-ID" : "en-MY";
     setGeneratedAt(new Date().toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" }));
     setShown(true);
   };
 
-  // === DOWNLOAD FUNCTION ===
+  // === DOWNLOAD PDF LOGIC ===
   const handleDownloadPdf = () => {
     if (!slipRef.current) return;
     setIsDownloading(true);
@@ -307,11 +396,11 @@ function App() {
     const fileName = `${activePreset}_KRS_${matricNo || "dokumen"}.pdf`;
 
     const opt = {
-      margin: 0, 
+      margin: 0,
       filename: fileName,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
+      html2canvas: {
+        scale: 2,
         useCORS: true,
         logging: false,
         dpi: 192,
@@ -356,34 +445,34 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 p-4 md:p-8 font-sans">
-      
-      {/* SWITCHER */}
-      <div className="max-w-5xl mx-auto mb-8 flex justify-center gap-4">
+
+      {/* SWITCHER BUTTONS */}
+      <div className="max-w-5xl mx-auto mb-8 flex flex-wrap justify-center gap-4">
         {Object.keys(PRESETS).map(key => (
-             <button 
+             <button
                 key={key}
                 onClick={() => setActivePreset(key)}
                 className={`px-6 py-2 rounded-full font-bold shadow-md transition ${
                     activePreset === key
-                    ? "bg-purple-600 text-white ring-2 ring-purple-400 shadow-purple-500/50" 
+                    ? "bg-purple-600 text-white ring-2 ring-purple-400 shadow-purple-500/50"
                     : "bg-slate-800 text-slate-400 hover:bg-slate-700"
                 }`}
             >
-                {key === "RAHARJA" ? "🏢 Raharja (Indonesia)" : "🕌 IIUM (Malaysia)"}
+                {key === "RAHARJA" ? "🏢 Raharja" : key === "IIUM" ? "🕌 IIUM" : "🎓 UoC"}
             </button>
         ))}
       </div>
 
       <div className="max-w-6xl mx-auto grid md:grid-cols-12 gap-6">
-        
-        {/* === INPUT FORM === */}
+
+        {/* === LEFT COLUMN: INPUT FORM === */}
         <div className="md:col-span-4 space-y-4">
             <div className="bg-slate-800 p-5 rounded-xl shadow-lg border border-slate-700">
                 <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
                     <h2 className="text-lg font-bold text-slate-100">⚙️ Data Mahasiswa</h2>
                     <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-blue-300">{semesterText}</span>
                 </div>
-                
+
                 <div className="space-y-3">
                     <div className="flex items-end gap-2">
                         <div className="flex-1">
@@ -391,11 +480,11 @@ function App() {
                         </div>
                         <button onClick={handleAutoFillStudent} className="bg-slate-600 h-[38px] px-3 rounded hover:bg-slate-500 text-xs text-white font-semibold mb-[1px]">Auto</button>
                     </div>
-                    
+
                     <InputGroup label={L.studentName} value={studentName} onChange={e=>setStudentName(e.target.value)} />
                     <InputGroup label={L.faculty} value={faculty} onChange={e=>setFaculty(e.target.value)} />
                     <InputGroup label={L.dept} value={department} onChange={e=>setDepartment(e.target.value)} />
-                    
+
                     <div className="grid grid-cols-2 gap-2">
                         <InputGroup label={L.level} value={level} onChange={e=>setLevel(e.target.value)} />
                         <InputGroup label={L.section} value={section} onChange={e=>setSection(e.target.value)} />
@@ -403,9 +492,26 @@ function App() {
 
                     <InputGroup label="Email (Official)" value={email} onChange={e=>setEmail(e.target.value)} placeholder="...Username" />
                     <InputGroup label="No. Handphone" value={phone} onChange={e=>setPhone(e.target.value)} />
+
+                    {/* === SIGNATURE MAKER === */}
+                    <div className="mt-4 pt-4 border-t border-slate-700">
+                        <label className="block font-semibold text-xs text-slate-400 uppercase mb-2">Tanda Tangan Mahasiswa (Opsional)</label>
+                        <signature-maker
+                            id="signatureMaker"
+                            data-with-submit="false"
+                            data-download-on-save="false"
+                            data-clear-button-text="Hapus"
+                            data-undo-button-text="Undo"
+                            data-save-button-text="Simpan / Apply"
+                            data-canvas-class="bg-white rounded-lg w-full h-32"
+                            data-save-button-class="hidden" // Kita pakai event 'change' jadi tombol save bisa dihide atau dibiarkan
+                            class="block w-full"
+                        ></signature-maker>
+                        <p className="text-[10px] text-slate-500 mt-1 italic">*Tanda tangan akan otomatis muncul di preview.</p>
+                    </div>
                 </div>
 
-                <button 
+                <button
                     onClick={handleGenerateSlip}
                     className="w-full mt-6 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold py-3 rounded-lg shadow-lg transition transform hover:scale-[1.02]"
                 >
@@ -414,14 +520,14 @@ function App() {
             </div>
         </div>
 
-        {/* === PREVIEW === */}
+        {/* === RIGHT COLUMN: PREVIEW === */}
         <div className="md:col-span-8">
             {shown ? (
                 <div className="space-y-4 animate-fade-in">
                     <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
                          <span className="text-sm text-slate-300 font-semibold">📄 Preview Dokumen A4</span>
-                        <button 
-                            onClick={handleDownloadPdf} 
+                        <button
+                            onClick={handleDownloadPdf}
                             disabled={isDownloading}
                             className={`text-white text-sm px-5 py-2 rounded shadow flex items-center gap-2 font-bold transition-all ${
                                 isDownloading ? "bg-gray-500 cursor-not-allowed" : "bg-red-600 hover:bg-red-500"
@@ -433,11 +539,11 @@ function App() {
 
                     {/* === KERTAS DOKUMEN (AREA PRINT) === */}
                     <div className="overflow-auto pb-10 flex justify-center">
-                        <div 
-                            ref={slipRef} 
-                            style={{ 
-                                width: "210mm", 
-                                minHeight: "297mm", 
+                        <div
+                            ref={slipRef}
+                            style={{
+                                width: "210mm",
+                                minHeight: "297mm",
                                 padding: "20mm",
                                 fontFamily: "'Times New Roman', Times, serif",
                                 backgroundColor: "#ffffff",
@@ -448,15 +554,15 @@ function App() {
                         >
                             {/* Header */}
                             <div className="border-b-2 border-black pb-2 mb-4 relative min-h-[80px]" style={{borderColor: "#000000"}}>
-                                <img 
-                                    src={C.logoUrl} 
-                                    alt="Logo" 
-                                    style={{ 
-                                        position: "absolute", 
-                                        left: 0, 
-                                        top: 0, 
-                                        height: "70px", 
-                                        width: "auto" 
+                                <img
+                                    src={C.logoUrl}
+                                    alt="Logo"
+                                    style={{
+                                        position: "absolute",
+                                        left: 0,
+                                        top: 0,
+                                        // MENGGUNAKAN LOGO STYLE DARI CONFIG
+                                        ...C.logoStyle
                                     }}
                                     onError={(e) => e.target.style.display = 'none'}
                                 />
@@ -551,7 +657,11 @@ function App() {
                             {/* Tanda Tangan */}
                             <div className="grid grid-cols-3 gap-4 text-center mt-12" style={{fontSize: "10pt"}}>
                                 <div>
-                                    <p className="mb-16">{L.studentName}</p>
+                                    <p className="mb-4">{L.studentName}</p>
+                                    {/* === AREA TANDA TANGAN MAHASISWA === */}
+                                    <div className="h-20 flex items-center justify-center mb-2 relative">
+
+                                    </div>
                                     <p className="font-bold underline uppercase">{studentName}</p>
                                 </div>
                                 <div>
@@ -559,12 +669,28 @@ function App() {
                                     <p className="border-b border-black w-3/4 mx-auto" style={{borderColor: "#000000"}}></p>
                                 </div>
                                 <div>
-                                    <p className="mb-2">{C.officeText}</p>
-                                    <p className="mb-12" style={{fontSize: "9pt", color: "#666"}}>Dicetak: {generatedAt}</p>
-                                    <p className="font-bold underline">Administrator</p>
+                                    <p className="mb-4">{C.officeText}</p>
+                                    {/* LOGIKA TANDA TANGAN GAMBAR */}
+                                    <div className="h-20 flex items-center justify-center mb-2">
+                                        {C.signUrl ? (
+                                            <img
+                                                src={C.signUrl}
+                                                alt="Digital Signature"
+                                                className="h-full object-contain"
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none';
+                                                    e.target.parentElement.innerHTML = '<p class="font-bold underline text-red-500">Sign Error</p>';
+                                                }}
+                                            />
+                                        ) : (
+                                            <div className="h-16 w-full border-b border-dashed border-gray-400"></div>
+                                        )}
+                                    </div>
+                                    <p className="mb-2" style={{fontSize: "9pt", color: "#666"}}>Dicetak: {generatedAt}</p>
+                                    <p className="font-bold underline">Administrator / Registrar</p>
                                 </div>
                             </div>
-                            
+
                             <div className="mt-8 text-center italic border-t pt-2" style={{fontSize: "9pt", borderColor: "#e5e7eb", color: "#888"}}>
                                 This document is computer generated. No signature is required.
                             </div>

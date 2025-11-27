@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@docuseal/signature-maker-js": "^1.0.1",
     "@faker-js/faker": "^10.1.0",
     "@tailwindcss/vite": "^4.1.17",
     "html2pdf.js": "^0.12.1",
